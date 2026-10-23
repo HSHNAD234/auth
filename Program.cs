@@ -1,4 +1,4 @@
-﻿
+
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
@@ -10,24 +10,36 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.OAuth;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load the existing secrets.json without requiring the user to copy OAuth credentials
-// into source code. Search the app working directory, app base directory, and parent
-// directories (the solution root is a common location when launched from Visual Studio).
-foreach (var candidate in FindSecretsFiles(AppContext.BaseDirectory, Environment.CurrentDirectory))
+// Load optional local secrets.json files.
+// On Render, configure secrets using Environment Variables.
+foreach (var candidate in FindSecretsFiles(
+    AppContext.BaseDirectory,
+    Environment.CurrentDirectory))
 {
-    builder.Configuration.AddJsonFile(candidate, optional: true, reloadOnChange: true);
+    builder.Configuration.AddJsonFile(
+        candidate,
+        optional: true,
+        reloadOnChange: false);
 }
 
-// One-time tickets exist only in memory and expire quickly. Never put provider secrets in the launcher.
-var launcherTickets = new ConcurrentDictionary<string, LauncherTicket>(StringComparer.Ordinal);
-var emailChallenges = new ConcurrentDictionary<string, EmailChallenge>(StringComparer.OrdinalIgnoreCase);
-var emailSendTimes = new ConcurrentDictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+var launcherTickets =
+    new ConcurrentDictionary<string, LauncherTicket>(
+        StringComparer.Ordinal);
 
+var emailChallenges =
+    new ConcurrentDictionary<string, EmailChallenge>(
+        StringComparer.OrdinalIgnoreCase);
 
-const string CookieScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+var emailSendTimes =
+    new ConcurrentDictionary<string, DateTimeOffset>(
+        StringComparer.OrdinalIgnoreCase);
+
+const string CookieScheme =
+    CookieAuthenticationDefaults.AuthenticationScheme;
 
 builder.Services
     .AddAuthentication(options =>
@@ -44,15 +56,17 @@ builder.Services
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
-
         options.LoginPath = "/";
         options.AccessDeniedPath = "/";
     })
     .AddGoogle("Google", options =>
     {
-        options.ClientId = RequiredSetting(builder.Configuration,
+        options.ClientId = RequiredSetting(
+            builder.Configuration,
             "Authentication:Google:ClientId");
-        options.ClientSecret = RequiredSetting(builder.Configuration,
+
+        options.ClientSecret = RequiredSetting(
+            builder.Configuration,
             "Authentication:Google:ClientSecret");
 
         options.CallbackPath = "/signin-google";
@@ -60,22 +74,31 @@ builder.Services
     })
     .AddOAuth("Discord", options =>
     {
-        options.ClientId = RequiredSetting(builder.Configuration,
+        options.ClientId = RequiredSetting(
+            builder.Configuration,
             "Authentication:Discord:ClientId");
-        options.ClientSecret = RequiredSetting(builder.Configuration,
+
+        options.ClientSecret = RequiredSetting(
+            builder.Configuration,
             "Authentication:Discord:ClientSecret");
 
         options.CallbackPath = "/signin-discord";
-        options.AuthorizationEndpoint = "https://discord.com/oauth2/authorize";
-        options.TokenEndpoint = "https://discord.com/api/oauth2/token";
-        options.UserInformationEndpoint = "https://discord.com/api/users/@me";
+        options.AuthorizationEndpoint =
+            "https://discord.com/oauth2/authorize";
+        options.TokenEndpoint =
+            "https://discord.com/api/oauth2/token";
+        options.UserInformationEndpoint =
+            "https://discord.com/api/users/@me";
 
         options.Scope.Add("identify");
         options.Scope.Add("email");
 
-        options.ClaimActions.MapJsonKey(ClaimTypes.NameIdentifier, "id");
-        options.ClaimActions.MapJsonKey(ClaimTypes.Name, "username");
-        options.ClaimActions.MapJsonKey(ClaimTypes.Email, "email");
+        options.ClaimActions.MapJsonKey(
+            ClaimTypes.NameIdentifier, "id");
+        options.ClaimActions.MapJsonKey(
+            ClaimTypes.Name, "username");
+        options.ClaimActions.MapJsonKey(
+            ClaimTypes.Email, "email");
 
         options.Events = new OAuthEvents
         {
@@ -88,10 +111,14 @@ builder.Services
                 request.Headers.Authorization =
                     new AuthenticationHeaderValue(
                         "Bearer", context.AccessToken);
-                request.Headers.UserAgent.ParseAdd("FortuPurr.AuthApi");
 
-                using var response = await context.Backchannel.SendAsync(
-                    request, context.HttpContext.RequestAborted);
+                request.Headers.UserAgent.ParseAdd(
+                    "FortuPurr.AuthApi");
+
+                using var response =
+                    await context.Backchannel.SendAsync(
+                        request,
+                        context.HttpContext.RequestAborted);
 
                 response.EnsureSuccessStatusCode();
 
@@ -105,9 +132,12 @@ builder.Services
     })
     .AddOAuth("GitHub", options =>
     {
-        options.ClientId = RequiredSetting(builder.Configuration,
+        options.ClientId = RequiredSetting(
+            builder.Configuration,
             "Authentication:GitHub:ClientId");
-        options.ClientSecret = RequiredSetting(builder.Configuration,
+
+        options.ClientSecret = RequiredSetting(
+            builder.Configuration,
             "Authentication:GitHub:ClientSecret");
 
         options.CallbackPath = "/signin-github";
@@ -115,13 +145,17 @@ builder.Services
             "https://github.com/login/oauth/authorize";
         options.TokenEndpoint =
             "https://github.com/login/oauth/access_token";
-        options.UserInformationEndpoint = "https://api.github.com/user";
+        options.UserInformationEndpoint =
+            "https://api.github.com/user";
 
         options.Scope.Add("read:user");
 
-        options.ClaimActions.MapJsonKey(ClaimTypes.NameIdentifier, "id");
-        options.ClaimActions.MapJsonKey(ClaimTypes.Name, "login");
-        options.ClaimActions.MapJsonKey(ClaimTypes.Email, "email");
+        options.ClaimActions.MapJsonKey(
+            ClaimTypes.NameIdentifier, "id");
+        options.ClaimActions.MapJsonKey(
+            ClaimTypes.Name, "login");
+        options.ClaimActions.MapJsonKey(
+            ClaimTypes.Email, "email");
 
         options.Events = new OAuthEvents
         {
@@ -134,10 +168,14 @@ builder.Services
                 request.Headers.Authorization =
                     new AuthenticationHeaderValue(
                         "Bearer", context.AccessToken);
-                request.Headers.UserAgent.ParseAdd("FortuPurr.AuthApi");
 
-                using var response = await context.Backchannel.SendAsync(
-                    request, context.HttpContext.RequestAborted);
+                request.Headers.UserAgent.ParseAdd(
+                    "FortuPurr.AuthApi");
+
+                using var response =
+                    await context.Backchannel.SendAsync(
+                        request,
+                        context.HttpContext.RequestAborted);
 
                 response.EnsureSuccessStatusCode();
 
@@ -154,13 +192,25 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+// Configure forwarded headers before middleware that depends on
+// the original request scheme, such as authentication and redirects.
+// Keep the default trusted-proxy restrictions unless you explicitly
+// configure Render's proxy addresses.
 if (!app.Environment.IsDevelopment())
 {
+    app.UseForwardedHeaders(new ForwardedHeadersOptions
+    {
+        ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto
+    });
+
     app.UseExceptionHandler("/error");
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Render terminates public HTTPS at its proxy.
+// Do not force an HTTPS redirect on the internal container connection.
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -224,108 +274,216 @@ app.MapGet("/login/{provider}", (string provider) =>
 {
     var allowedProviders = new[] { "Google", "Discord", "GitHub" };
 
-    if (!allowedProviders.Contains(provider, StringComparer.OrdinalIgnoreCase))
-        return Results.BadRequest("ไม่รองรับผู้ให้บริการนี้");
+    var actualProvider = allowedProviders.FirstOrDefault(
+        p => string.Equals(
+            p, provider, StringComparison.OrdinalIgnoreCase));
 
-    var actualProvider = allowedProviders.First(p =>
-        string.Equals(p, provider, StringComparison.OrdinalIgnoreCase));
+    if (actualProvider is null)
+        return Results.BadRequest("ไม่รองรับผู้ให้บริการนี้");
 
     var properties = new AuthenticationProperties
     {
         RedirectUri = "/login-success"
     };
 
-    return Results.Challenge(properties, new[] { actualProvider });
+    return Results.Challenge(
+        properties, new[] { actualProvider });
 });
 
-// Desktop launcher flow: OAuth completes in the system browser, then returns only a short-lived ticket.
-app.MapGet("/launcher/login/{provider}", (string provider, int port, string state) =>
+// Desktop launcher OAuth flow
+app.MapGet(
+    "/launcher/login/{provider}",
+    (string provider, int port, string state) =>
 {
     var allowed = new[] { "Google", "Discord", "GitHub" };
-    var actual = allowed.FirstOrDefault(p => string.Equals(p, provider, StringComparison.OrdinalIgnoreCase));
-    if (actual is null) return Results.BadRequest("ไม่รองรับผู้ให้บริการนี้");
-    if (port is < 1024 or > 65535 || string.IsNullOrWhiteSpace(state) || state.Length > 128)
-        return Results.BadRequest("พารามิเตอร์ launcher ไม่ถูกต้อง");
 
-    var properties = new AuthenticationProperties { RedirectUri = "/launcher/complete" };
-    properties.Items["launcher_port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    var actual = allowed.FirstOrDefault(
+        p => string.Equals(
+            p, provider, StringComparison.OrdinalIgnoreCase));
+
+    if (actual is null)
+        return Results.BadRequest("ไม่รองรับผู้ให้บริการนี้");
+
+    if (port is < 1024 or > 65535 ||
+        string.IsNullOrWhiteSpace(state) ||
+        state.Length > 128)
+    {
+        return Results.BadRequest(
+            "พารามิเตอร์ launcher ไม่ถูกต้อง");
+    }
+
+    var properties = new AuthenticationProperties
+    {
+        RedirectUri = "/launcher/complete"
+    };
+
+    properties.Items["launcher_port"] =
+        port.ToString(
+            System.Globalization.CultureInfo.InvariantCulture);
+
     properties.Items["launcher_state"] = state;
     properties.Items["launcher_provider"] = actual;
+
     return Results.Challenge(properties, new[] { actual });
 });
 
 app.MapGet("/launcher/complete", (HttpContext context) =>
 {
-    if (context.User.Identity?.IsAuthenticated != true) return Results.Redirect("/");
-    var auth = context.Features.Get<Microsoft.AspNetCore.Authentication.IAuthenticateResultFeature>()?.AuthenticateResult;
-    // AuthenticationProperties are restored by the OAuth handler and available from the ticket's auth properties.
+    if (context.User.Identity?.IsAuthenticated != true)
+        return Results.Redirect("/");
+
+    var auth = context.Features
+        .Get<Microsoft.AspNetCore.Authentication.IAuthenticateResultFeature>()
+        ?.AuthenticateResult;
+
     string? portText = null;
     string? state = null;
     string provider = "OAuth";
+
     if (auth?.Properties is { } authProperties)
     {
-        if (authProperties.Items.TryGetValue("launcher_port", out var savedPort))
-            portText = savedPort;
-        if (authProperties.Items.TryGetValue("launcher_state", out var savedState))
-            state = savedState;
-        if (authProperties.Items.TryGetValue("launcher_provider", out var savedProvider) &&
-            !string.IsNullOrWhiteSpace(savedProvider))
-            provider = savedProvider;
-    }
-    if (!int.TryParse(portText, out var port) || port is < 1024 or > 65535 || string.IsNullOrWhiteSpace(state))
-        return Results.BadRequest("ไม่พบข้อมูล launcher ที่ถูกต้อง กรุณาเริ่มเข้าสู่ระบบใหม่");
+        authProperties.Items.TryGetValue(
+            "launcher_port", out portText);
 
-    var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        authProperties.Items.TryGetValue(
+            "launcher_state", out state);
+
+        if (authProperties.Items.TryGetValue(
+                "launcher_provider", out var savedProvider) &&
+            !string.IsNullOrWhiteSpace(savedProvider))
+        {
+            provider = savedProvider;
+        }
+    }
+
+    if (!int.TryParse(portText, out var port) ||
+        port is < 1024 or > 65535 ||
+        string.IsNullOrWhiteSpace(state))
+    {
+        return Results.BadRequest(
+            "ไม่พบข้อมูล launcher ที่ถูกต้อง กรุณาเริ่มเข้าสู่ระบบใหม่");
+    }
+
+    var ticket = Convert.ToHexString(
+        RandomNumberGenerator.GetBytes(32));
+
     launcherTickets[ticket] = new LauncherTicket(
         context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "",
-        context.User.FindFirst(ClaimTypes.Name)?.Value ?? context.User.FindFirst("name")?.Value ?? "ผู้ใช้",
+        context.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? context.User.FindFirst("name")?.Value
+            ?? "ผู้ใช้",
         context.User.FindFirst(ClaimTypes.Email)?.Value ?? "",
         provider,
         DateTimeOffset.UtcNow.AddMinutes(2));
 
-    var cleanupBefore = DateTimeOffset.UtcNow;
-    foreach (var item in launcherTickets.Where(x => x.Value.ExpiresAt <= cleanupBefore).ToArray())
-        launcherTickets.TryRemove(item.Key, out _);
+    var now = DateTimeOffset.UtcNow;
 
-    var callback = $"http://127.0.0.1:{port}/callback?ticket={Uri.EscapeDataString(ticket)}&state={Uri.EscapeDataString(state)}";
+    foreach (var item in launcherTickets
+        .Where(x => x.Value.ExpiresAt <= now).ToArray())
+    {
+        launcherTickets.TryRemove(item.Key, out _);
+    }
+
+    var callback =
+        $"http://127.0.0.1:{port}/callback" +
+        $"?ticket={Uri.EscapeDataString(ticket)}" +
+        $"&state={Uri.EscapeDataString(state)}";
+
     return Results.Redirect(callback);
 });
 
 app.MapPost("/launcher/exchange", async (HttpContext context) =>
 {
-    using var body = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted);
-    var ticket = body.RootElement.TryGetProperty("ticket", out var value) ? value.GetString() : null;
-    if (string.IsNullOrWhiteSpace(ticket) || !launcherTickets.TryRemove(ticket, out var result) || result.ExpiresAt <= DateTimeOffset.UtcNow)
+    using var body = await JsonDocument.ParseAsync(
+        context.Request.Body,
+        cancellationToken: context.RequestAborted);
+
+    var ticket = body.RootElement.TryGetProperty(
+        "ticket", out var value)
+        ? value.GetString()
+        : null;
+
+    if (string.IsNullOrWhiteSpace(ticket) ||
+        !launcherTickets.TryRemove(ticket, out var result) ||
+        result.ExpiresAt <= DateTimeOffset.UtcNow)
+    {
         return Results.Unauthorized();
-    return Results.Json(new { result.Subject, result.Name, result.Email, result.Provider });
+    }
+
+    return Results.Json(new
+    {
+        result.Subject,
+        result.Name,
+        result.Email,
+        result.Provider
+    });
 });
 
-// Email verification for local registration and adding a secondary email to an existing account.
-app.MapPost("/email/send-code", async (EmailCodeRequest input, HttpContext context) =>
+// Send email verification code
+app.MapPost(
+    "/email/send-code",
+    async (EmailCodeRequest input, HttpContext context) =>
 {
     var email = (input.Email ?? "").Trim().ToLowerInvariant();
     var purpose = input.Purpose is "link" ? "link" : "register";
-    if (email.Length > 254 || !System.Net.Mail.MailAddress.TryCreate(email, out var parsed) ||
-        !string.Equals(parsed.Address, email, StringComparison.OrdinalIgnoreCase))
-        return Results.BadRequest(new { ok = false, message = "กรุณากรอกอีเมลให้ถูกต้อง" });
+
+    if (email.Length > 254 ||
+        !MailAddress.TryCreate(email, out var parsed) ||
+        !string.Equals(
+            parsed.Address, email, StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.BadRequest(new
+        {
+            ok = false,
+            message = "กรุณากรอกอีเมลให้ถูกต้อง"
+        });
+    }
 
     var now = DateTimeOffset.UtcNow;
-    if (emailSendTimes.TryGetValue(email, out var last) && now - last < TimeSpan.FromSeconds(60))
-        return Results.Json(new { ok = false, message = "กรุณารอ 60 วินาทีก่อนขอรหัสใหม่" }, statusCode: 429);
+
+    if (emailSendTimes.TryGetValue(email, out var last) &&
+        now - last < TimeSpan.FromSeconds(60))
+    {
+        return Results.Json(new
+        {
+            ok = false,
+            message = "กรุณารอ 60 วินาทีก่อนขอรหัสใหม่"
+        }, statusCode: 429);
+    }
 
     var smtpHost = builder.Configuration["Email:Smtp:Host"];
     var smtpUser = builder.Configuration["Email:Smtp:Username"];
     var smtpPass = builder.Configuration["Email:Smtp:AppPassword"];
     var fromAddress = builder.Configuration["Email:Smtp:From"] ?? smtpUser;
-    var port = int.TryParse(builder.Configuration["Email:Smtp:Port"], out var parsedPort) ? parsedPort : 587;
-    if (string.IsNullOrWhiteSpace(smtpHost) || string.IsNullOrWhiteSpace(smtpUser) ||
-        string.IsNullOrWhiteSpace(smtpPass) || string.IsNullOrWhiteSpace(fromAddress))
-        return Results.Problem("ยังไม่ได้ตั้งค่า Gmail SMTP ใน User Secrets ของ FortuPurr.AuthApi", statusCode: 503);
 
-    var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+    var smtpPort = int.TryParse(
+        builder.Configuration["Email:Smtp:Port"],
+        out var parsedPort) ? parsedPort : 587;
+
+    if (string.IsNullOrWhiteSpace(smtpHost) ||
+        string.IsNullOrWhiteSpace(smtpUser) ||
+        string.IsNullOrWhiteSpace(smtpPass) ||
+        string.IsNullOrWhiteSpace(fromAddress))
+    {
+        return Results.Problem(
+            "ยังไม่ได้ตั้งค่า Gmail SMTP",
+            statusCode: 503);
+    }
+
+    var code = RandomNumberGenerator.GetInt32(0, 1_000_000)
+        .ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+
     var salt = RandomNumberGenerator.GetBytes(16);
-    var hash = SHA256.HashData(salt.Concat(System.Text.Encoding.UTF8.GetBytes(code)).ToArray());
-    emailChallenges[email] = new EmailChallenge(Convert.ToBase64String(salt), Convert.ToBase64String(hash), purpose, now.AddMinutes(10), 0);
+    var hash = SHA256.HashData(
+        salt.Concat(System.Text.Encoding.UTF8.GetBytes(code)).ToArray());
+
+    emailChallenges[email] = new EmailChallenge(
+        Convert.ToBase64String(salt),
+        Convert.ToBase64String(hash),
+        purpose,
+        now.AddMinutes(10),
+        0);
+
     emailSendTimes[email] = now;
 
     try
@@ -334,9 +492,12 @@ app.MapPost("/email/send-code", async (EmailCodeRequest input, HttpContext conte
         message.From = new MailAddress(fromAddress, "FortuPurr");
         message.To.Add(new MailAddress(email));
         message.Subject = "รหัสยืนยันอีเมล FortuPurr";
-        message.Body = $"รหัสยืนยันอีเมล FortuPurr ของคุณคือ {code}\r\n\r\nรหัสนี้หมดอายุภายใน 10 นาที และใช้ได้ครั้งเดียว หากคุณไม่ได้ร้องขอ สามารถละเว้นอีเมลนี้ได้";
+        message.Body =
+            $"รหัสยืนยันอีเมล FortuPurr ของคุณคือ {code}\r\n\r\n" +
+            "รหัสนี้หมดอายุภายใน 10 นาที และใช้ได้ครั้งเดียว";
         message.IsBodyHtml = false;
-        using var smtp = new SmtpClient(smtpHost, port)
+
+        using var smtp = new SmtpClient(smtpHost, smtpPort)
         {
             EnableSsl = true,
             DeliveryMethod = SmtpDeliveryMethod.Network,
@@ -344,43 +505,96 @@ app.MapPost("/email/send-code", async (EmailCodeRequest input, HttpContext conte
             Credentials = new NetworkCredential(smtpUser, smtpPass),
             Timeout = 15000
         };
+
         await smtp.SendMailAsync(message, context.RequestAborted);
-        return Results.Ok(new { ok = true, message = "ส่งรหัสยืนยันไปยังอีเมลแล้ว" });
+
+        return Results.Ok(new
+        {
+            ok = true,
+            message = "ส่งรหัสยืนยันไปยังอีเมลแล้ว"
+        });
     }
     catch
     {
         emailChallenges.TryRemove(email, out _);
         emailSendTimes.TryRemove(email, out _);
-        return Results.Problem("ส่งอีเมลไม่สำเร็จ โปรดตรวจสอบ Gmail App Password และการตั้งค่า SMTP", statusCode: 502);
+
+        return Results.Problem(
+            "ส่งอีเมลไม่สำเร็จ โปรดตรวจสอบ Gmail App Password และ SMTP",
+            statusCode: 502);
     }
 });
 
-app.MapPost("/email/verify-code", (EmailCodeVerifyRequest input) =>
+// Verify email code
+app.MapPost(
+    "/email/verify-code",
+    (EmailCodeVerifyRequest input) =>
 {
     var email = (input.Email ?? "").Trim().ToLowerInvariant();
     var code = (input.Code ?? "").Trim();
+    var purpose = input.Purpose is "link" ? "link" : "register";
+
     if (code.Length != 6 || code.Any(c => c < '0' || c > '9'))
-        return Results.BadRequest(new { ok = false, message = "กรุณากรอกรหัส 6 หลัก" });
-    if (!emailChallenges.TryGetValue(email, out var challenge) || challenge.ExpiresAt <= DateTimeOffset.UtcNow || !string.Equals(challenge.Purpose, input.Purpose is "link" ? "link" : "register", StringComparison.Ordinal))
+    {
+        return Results.BadRequest(new
+        {
+            ok = false,
+            message = "กรุณากรอกรหัส 6 หลัก"
+        });
+    }
+
+    if (!emailChallenges.TryGetValue(email, out var challenge) ||
+        challenge.ExpiresAt <= DateTimeOffset.UtcNow ||
+        !string.Equals(challenge.Purpose, purpose, StringComparison.Ordinal))
     {
         emailChallenges.TryRemove(email, out _);
-        return Results.Json(new { ok = false, message = "รหัสหมดอายุหรือไม่มีรหัสที่ใช้งานได้ กรุณาขอรหัสใหม่" }, statusCode: 400);
+
+        return Results.BadRequest(new
+        {
+            ok = false,
+            message = "รหัสหมดอายุหรือไม่มีรหัสที่ใช้งานได้ กรุณาขอรหัสใหม่"
+        });
     }
+
     if (challenge.Attempts >= 5)
     {
         emailChallenges.TryRemove(email, out _);
-        return Results.Json(new { ok = false, message = "กรอกรหัสผิดเกินกำหนด กรุณาขอรหัสใหม่" }, statusCode: 429);
+
+        return Results.Json(new
+        {
+            ok = false,
+            message = "กรอกรหัสผิดเกินกำหนด กรุณาขอรหัสใหม่"
+        }, statusCode: 429);
     }
-    var actual = SHA256.HashData(Convert.FromBase64String(challenge.Salt).Concat(System.Text.Encoding.UTF8.GetBytes(code)).ToArray());
+
+    var actual = SHA256.HashData(
+        Convert.FromBase64String(challenge.Salt)
+        .Concat(System.Text.Encoding.UTF8.GetBytes(code))
+        .ToArray());
+
     var expected = Convert.FromBase64String(challenge.CodeHash);
+
     if (!CryptographicOperations.FixedTimeEquals(actual, expected))
     {
-        emailChallenges[email] = challenge with { Attempts = challenge.Attempts + 1 };
-        return Results.BadRequest(new { ok = false, message = $"รหัสไม่ถูกต้อง (เหลือ {4 - challenge.Attempts} ครั้ง)" });
+        emailChallenges[email] =
+            challenge with { Attempts = challenge.Attempts + 1 };
+
+        return Results.BadRequest(new
+        {
+            ok = false,
+            message = $"รหัสไม่ถูกต้อง (เหลือ {4 - challenge.Attempts} ครั้ง)"
+        });
     }
-    emailChallenges.TryRemove(email, out _); // one-time code
+
+    emailChallenges.TryRemove(email, out _);
     emailSendTimes.TryRemove(email, out _);
-    return Results.Ok(new { ok = true, email, message = "ยืนยันอีเมลสำเร็จ" });
+
+    return Results.Ok(new
+    {
+        ok = true,
+        email,
+        message = "ยืนยันอีเมลสำเร็จ"
+    });
 });
 
 app.MapGet("/login-success", (ClaimsPrincipal user) =>
@@ -392,7 +606,7 @@ app.MapGet("/login-success", (ClaimsPrincipal user) =>
         ?? user.FindFirst("name")?.Value
         ?? "ผู้ใช้";
 
-    var safeName = System.Net.WebUtility.HtmlEncode(name);
+    var safeName = WebUtility.HtmlEncode(name);
 
     var html = $$"""
     <!doctype html>
@@ -449,35 +663,53 @@ app.Run();
 static IEnumerable<string> FindSecretsFiles(params string[] startingDirectories)
 {
     var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     foreach (var start in startingDirectories.Where(Directory.Exists))
     {
         var current = new DirectoryInfo(start);
-        for (var depth = 0; current is not null && depth < 6; depth++, current = current.Parent)
+
+        for (var depth = 0;
+             current is not null && depth < 6;
+             depth++, current = current.Parent)
         {
             var candidate = Path.Combine(current.FullName, "secrets.json");
+
             if (File.Exists(candidate) && found.Add(candidate))
                 yield return candidate;
         }
     }
 }
 
-static string RequiredSetting(
-    IConfiguration configuration, string key)
+static string RequiredSetting(IConfiguration configuration, string key)
 {
     var value = configuration[key];
 
     if (string.IsNullOrWhiteSpace(value))
     {
         throw new InvalidOperationException(
-            $"ยังไม่ได้ตั้งค่า {key} ใน User Secrets");
+            $"ยังไม่ได้ตั้งค่า {key} ใน Configuration หรือ Environment Variables");
     }
 
     return value;
 }
 
-
-record LauncherTicket(string Subject, string Name, string Email, string Provider, DateTimeOffset ExpiresAt);
+record LauncherTicket(
+    string Subject,
+    string Name,
+    string Email,
+    string Provider,
+    DateTimeOffset ExpiresAt);
 
 record EmailCodeRequest(string? Email, string? Purpose);
-record EmailCodeVerifyRequest(string? Email, string? Code, string? Purpose);
-record EmailChallenge(string Salt, string CodeHash, string Purpose, DateTimeOffset ExpiresAt, int Attempts);
+
+record EmailCodeVerifyRequest(
+    string? Email,
+    string? Code,
+    string? Purpose);
+
+record EmailChallenge(
+    string Salt,
+    string CodeHash,
+    string Purpose,
+    DateTimeOffset ExpiresAt,
+    int Attempts);
