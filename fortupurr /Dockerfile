@@ -3,9 +3,11 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY . .
-
-RUN dotnet restore "./FortuPurr.AuthApi.csproj"
-RUN dotnet publish "./FortuPurr.AuthApi.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet restore "FortuPurr.AuthApi.csproj"
+RUN dotnet publish "FortuPurr.AuthApi.csproj" \
+    --configuration Release \
+    --output /app/publish \
+    /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
