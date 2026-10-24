@@ -202,6 +202,13 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "ok",
+    service = "FortuPurr.AuthApi",
+    timestamp = DateTimeOffset.UtcNow
+}));
+
 app.MapGet("/", (HttpContext context) =>
 {
     if (context.User.Identity?.IsAuthenticated == true)
