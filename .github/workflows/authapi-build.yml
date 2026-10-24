@@ -1,0 +1,32 @@
+name: AuthApi build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore ./FortuPurr.AuthApi.csproj
+
+      - name: Build
+        run: dotnet build ./FortuPurr.AuthApi.csproj --configuration Release --no-restore
+
+      - name: Build Docker image
+        run: docker build --tag fortupurr-authapi:ci --file Dockerfile .
