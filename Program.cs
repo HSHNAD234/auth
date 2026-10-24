@@ -61,26 +61,18 @@ builder.Services
     })
     .AddGoogle("Google", options =>
     {
-        options.ClientId = RequiredSetting(
-            builder.Configuration,
-            "Authentication:Google:ClientId");
+        options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
 
-        options.ClientSecret = RequiredSetting(
-            builder.Configuration,
-            "Authentication:Google:ClientSecret");
+        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
 
         options.CallbackPath = "/signin-google";
         options.SaveTokens = false;
     })
     .AddOAuth("Discord", options =>
     {
-        options.ClientId = RequiredSetting(
-            builder.Configuration,
-            "Authentication:Discord:ClientId");
+        options.ClientId = builder.Configuration["Authentication:Discord:ClientId"] ?? "";
 
-        options.ClientSecret = RequiredSetting(
-            builder.Configuration,
-            "Authentication:Discord:ClientSecret");
+        options.ClientSecret = builder.Configuration["Authentication:Discord:ClientSecret"] ?? "";
 
         options.CallbackPath = "/signin-discord";
         options.AuthorizationEndpoint =
@@ -132,13 +124,9 @@ builder.Services
     })
     .AddOAuth("GitHub", options =>
     {
-        options.ClientId = RequiredSetting(
-            builder.Configuration,
-            "Authentication:GitHub:ClientId");
+        options.ClientId = builder.Configuration["Authentication:GitHub:ClientId"] ?? "";
 
-        options.ClientSecret = RequiredSetting(
-            builder.Configuration,
-            "Authentication:GitHub:ClientSecret");
+        options.ClientSecret = builder.Configuration["Authentication:GitHub:ClientSecret"] ?? "";
 
         options.CallbackPath = "/signin-github";
         options.AuthorizationEndpoint =
@@ -281,6 +269,14 @@ app.MapGet("/login/{provider}", (string provider) =>
     if (actualProvider is null)
         return Results.BadRequest("ไม่รองรับผู้ให้บริการนี้");
 
+    if (string.IsNullOrWhiteSpace(builder.Configuration[$"Authentication:{actualProvider}:ClientId"]) ||
+        string.IsNullOrWhiteSpace(builder.Configuration[$"Authentication:{actualProvider}:ClientSecret"]))
+    {
+        return Results.Problem(
+            $"ยังไม่ได้ตั้งค่า OAuth ของ {actualProvider} บนเซิร์ฟเวอร์",
+            statusCode: 503);
+    }
+
     var properties = new AuthenticationProperties
     {
         RedirectUri = "/login-success"
@@ -303,6 +299,14 @@ app.MapGet(
 
     if (actual is null)
         return Results.BadRequest("ไม่รองรับผู้ให้บริการนี้");
+
+    if (string.IsNullOrWhiteSpace(builder.Configuration[$"Authentication:{actual}:ClientId"]) ||
+        string.IsNullOrWhiteSpace(builder.Configuration[$"Authentication:{actual}:ClientSecret"]))
+    {
+        return Results.Problem(
+            $"ยังไม่ได้ตั้งค่า OAuth ของ {actual} บนเซิร์ฟเวอร์",
+            statusCode: 503);
+    }
 
     if (port is < 1024 or > 65535 ||
         string.IsNullOrWhiteSpace(state) ||
